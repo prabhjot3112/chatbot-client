@@ -6,9 +6,10 @@ import { BiX } from "react-icons/bi";
 import { ChatbotOptions } from "../ChatbotOptions";
 import { io, Socket } from "socket.io-client";
 import VoiceInput from "./VoiceInput";
+import './ChatWindow.css'
 
 // ✅ Create a single socket instance outside the component (shared)
-const socket: Socket = io("http://localhost:3002", {
+const socket: Socket = io("https://onita-unpercussed-kole.ngrok-free.dev", {
   transports: ["websocket"],
   reconnection: true,
 });
@@ -199,8 +200,8 @@ const ChatBot: React.FC<PropType> = (props) => {
 
   return (
     <div
-      className={`flex flex-col 
-        max-h-[90vh] h-[80vh] w-full sm:w-96 mx sm:mx-5 rounded-2xl overflow-hidden shadow-2xl border transition-colors duration-300
+      className={`flex flex-col
+        max-h-[90vh] h-[80vh] w-full xs:w-96 mx sm:mx-5 rounded-2xl overflow-hidden shadow-2xl border transition-colors duration-300
         ${
           props.theme === "dark"
             ? "bg-slate-900 border-gray-800 text-white"
@@ -311,23 +312,28 @@ const ChatBot: React.FC<PropType> = (props) => {
           {file && <p className="text-xs truncate w-16 mt-1">{file.name}</p>}
 <div className="flex justify-center gap-2 items-center w-full">
 
-          <textarea
-            value={query}
-            onChange={handleChange}
-            onKeyDown={handleSubmit}
-            placeholder="Type a message..."
-            className={`border rounded-xl w-full p-2 focus:outline-none resize-none text-sm ${
-              props.theme === "dark"
-              ? "border-gray-700 focus:border-blue-500 bg-slate-800 text-white"
-              : "border-gray-300 focus:border-blue-500 bg-white text-gray-900"
-            }`}
-            rows={1}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              target.style.height = "auto";
-              target.style.height = `${Math.min(target.scrollHeight, 100)}px`;
-            }}
-          />
+         <textarea
+  value={query}
+  onChange={handleChange}
+  onKeyDown={handleSubmit}
+  placeholder="Type a message..."
+  className={`border rounded-xl w-full p-2 no-scrollbar focus:outline-none resize-none text-sm overflow-y-auto scrollbar-none ${
+    props.theme === "dark"
+      ? "border-gray-700 focus:border-blue-500 bg-slate-800 text-white"
+      : "border-gray-300 focus:border-blue-500 bg-white text-gray-900"
+  }`}
+  style={{
+    height: "auto",
+    maxHeight: "100px", // max height before scrolling
+  }}
+  rows={1}
+  onInput={(e) => {
+    const target = e.target as HTMLTextAreaElement;
+    target.style.height = "auto"; // reset height
+    target.style.height = `${Math.min(target.scrollHeight, 100)}px`; // auto-grow up to maxHeight
+  }}
+/>
+
          <VoiceInput
   onResult={(text) => {
     const newQuery = query ? query + " " + text : text;
