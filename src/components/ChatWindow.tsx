@@ -145,6 +145,53 @@ const ChatBot: React.FC<PropType> = (props) => {
     });
   };
 
+
+  const sendMessage = (text?: string) => {
+  if (isThinking.isTrue) return;
+
+  // Use passed text (from VoiceInput) or current query
+  const userMessage = text?.trim() || query.trim();
+  if (!userMessage) return;
+
+  // Clear input
+  setQuery("");
+  setIsThinking({ id: chatContext.chats.length + 1, isTrue: true });
+
+  // Add user message + thinking placeholder
+  const newChats = [
+    ...chatContext.chats,
+    { query: userMessage, from: "user" as const },
+    { query: "Thinking...", from: "system" as const },
+  ];
+  chatContext.setChats(newChats);
+
+  // Prepare messages for backend
+  const messagesToSend = [
+    {
+      role: "system",
+      content: `
+        RULES:
+        1. You are a helpful assistant for ${props.domain}.
+        2. Answer only questions related to this domain.
+        3. Be concise and friendly (1–3 lines).
+        4. Use ${props.data} for reference.
+      `,
+    },
+    ...newChats.map((q) => ({
+      role: q.from === "user" ? "user" : "assistant",
+      content: q.query,
+    })),
+  ];
+
+  console.log("🚀 Sending user_message to backend:", messagesToSend);
+
+  socket.emit("user_message", {
+    endpoints: props.apiSchema,
+    messages: messagesToSend,
+    authToken: localStorage.getItem("token") || "",
+  });
+};
+
   if (!chatContext) {
     console.error("ChatBot must be used within a ChatsProvider");
     return null;
@@ -281,7 +328,15 @@ const ChatBot: React.FC<PropType> = (props) => {
               target.style.height = `${Math.min(target.scrollHeight, 100)}px`;
             }}
           />
-          <VoiceInput onResult={(text) => setQuery(prev => prev + " " + text) }/>
+         <VoiceInput
+  onResult={(text) => {
+    const newQuery = query ? query + " " + text : text;
+    setQuery(newQuery);
+    // auto-send
+    setTimeout(() => sendMessage(newQuery), 100);
+  }}
+/>
+
               </div>
         </div>
       </div>
