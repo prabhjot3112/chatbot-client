@@ -5,7 +5,6 @@ import { FiRotateCcw } from "react-icons/fi";
 import { BiX } from "react-icons/bi";
 import { ChatbotOptions } from "../ChatbotOptions";
 import { io, Socket } from "socket.io-client";
-import { FaMicrophone } from "react-icons/fa";
 import VoiceInput from "./VoiceInput";
 
 // ✅ Create a single socket instance outside the component (shared)

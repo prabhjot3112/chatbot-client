@@ -1,12 +1,26 @@
 import { FaMicrophone } from "react-icons/fa";
 import { useState } from "react";
 
-const VoiceInput = ({ onResult }: { onResult: (text: string) => void }) => {
+interface VoiceInputProps {
+  onResult: (text: string) => void;
+}
+
+
+interface SpeechRecognitionEvent extends Event {
+  readonly results: SpeechRecognitionResultList;
+  readonly resultIndex: number;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  readonly error: string;
+  readonly message?: string;
+}
+const VoiceInput = ({ onResult }: VoiceInputProps) => {
   const [listening, setListening] = useState(false);
 
-  // @ts-ignore
+  // @ts-expect-error: window.SpeechRecognition or webkitSpeechRecognition
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+  const recognition: typeof SpeechRecognition | null = SpeechRecognition ? new SpeechRecognition() : null;
 
   if (recognition) {
     recognition.continuous = false;
@@ -15,11 +29,14 @@ const VoiceInput = ({ onResult }: { onResult: (text: string) => void }) => {
 
     recognition.onstart = () => setListening(true);
     recognition.onend = () => setListening(false);
+
+    // Fixing the SpeechRecognitionEvent type
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const transcript = event.results[0][0].transcript;
       onResult(transcript);
     };
-    recognition.onerror = (event) => {
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error("Speech recognition error:", event.error);
       setListening(false);
     };
