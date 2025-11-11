@@ -15,11 +15,28 @@ const Home = () => {
               method: 'GET',
               url: `${API_URL}/products/random`,
             },
+            
             {
               name:'Orders',
               description:"API for fetching buyer orders",
               method:'GET',
               url:`${API_URL}/orders/all`
+            },
+            {
+              name:'Buyer info',
+              description:'Get buyer information',
+              method:"GET",
+              url:`${API_URL}/buyer/get`
+            },
+            {
+              name:'Order item info',
+              description:'Get order item information like shipped, delivered etc. its different from order information , order and order item are different',
+              method:"GET",
+              url:`${API_URL}/orders/order/item/track`,
+              parameters:{
+                path:['order_id'],
+                instructions:"Get order id and append after item/track like e.g (orders/order/item/track/13) where 13 is order id"
+              }
             },
             {
 name:'Order details',
@@ -53,6 +70,7 @@ parameters:{
               method: 'POST',
               url: `${API_URL}/cart/add`,
               parameters: {
+                body:['product_id', 'quantity'],
                 instructions:
                   'Get the product name or id of the product from user queries, also get the quantity. NOTE: no need to get the buyerId as it will automatically be provided to backend using token',
               },
@@ -113,7 +131,9 @@ Pages: {domain}/privacy-policy, /refund-policy, /shipping-policy, /terms, /conta
 Buyers can see orders at {domain}/buyer/orders, notifications at /notifications.
 Vendors can add products in categories like electronics, home appliances, clothing, books, sports, beauty, automotive, and jewelry.
 Secure payments via Razorpay. 
-Features: order tracking, notifications via SSE, add-to-cart, etc. (Don't mention technical details to users).`}
+Features: order tracking, notifications via SSE, add-to-cart, etc. (Don't mention technical details to users).
+If any data have a link , wrap it with <a> tag
+`}
         />
       </div>
     </div>

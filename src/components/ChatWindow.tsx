@@ -7,23 +7,51 @@ import { ChatbotOptions } from "../ChatbotOptions";
 import { io, Socket } from "socket.io-client";
 import VoiceInput from "./VoiceInput";
 import './ChatWindow.css'
+import {  FaArrowUp, FaVolumeUp } from "react-icons/fa";
 
 // ✅ Create a single socket instance outside the component (shared)
-const socket: Socket = io("https://onita-unpercussed-kole.ngrok-free.dev", {
+// const socket: Socket = io("https://onita-unpercussed-kole.ngrok-free.dev", {
+// const socket: Socket = io("http://localhost:3002", {
+const socket: Socket = io('https://ishop-server-7di1.onrender.com',{
   transports: ["websocket"],
   reconnection: true,
 });
+const isMobile = /Mobi|Android/i.test(navigator.userAgent);
 
 interface PropType extends ChatbotOptions {
   setIsBotOpened: (v: boolean) => void;
 }
 
+
+interface isThinkingType{
+  isTrue:boolean,
+  id: string | number | undefined
+}
+
 const ChatBot: React.FC<PropType> = (props) => {
   const [query, setQuery] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [isThinking, setIsThinking] = useState({ isTrue: false, id: 0 });
+  const [isThinking, setIsThinking] = useState<isThinkingType>({ isTrue: false, id: 0 });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContext = useChats();
+
+  const normalizeMarkdown = (text: string) => {
+  // Convert <a href="...png">text</a> → ![text](...)
+  return text.replace(
+    /<a href="([^"]+\.(?:png|jpg|jpeg|gif|webp))"[^>]*>(.*?)<\/a>/gi,
+    "![$2]($1)"
+  );
+};
+
+const cleanOllamaContent = (text = "") => {
+  return text
+    // remove Ollama's internal markers
+    .replace(/<\|.*?\|>/g, "")
+    // trim any excessive newlines/whitespace
+    .trim();
+};
+
+
 
   // Scroll to bottom whenever chats update
   useEffect(() => {
@@ -33,7 +61,7 @@ const ChatBot: React.FC<PropType> = (props) => {
   // Debugging connection status
   useEffect(() => {
     socket.on("connect", () => {
-      console.log("✅ Connected to Socket.IO:", socket.id);
+      //console.log("✅ Connected to Socket.IO:", socket.id);
     });
 
     socket.on("connect_error", (err) => {
@@ -46,109 +74,163 @@ const ChatBot: React.FC<PropType> = (props) => {
     };
   }, []);
 
-  // Listen for bot messages only once
+
+  const [isInputEmpty, setIsInputEmpty] = useState(true);
+
+
   useEffect(() => {
-    const handleBotMessage = (chunk: { content: string }) => {
-      console.log("📩 bot_message:", chunk);
-      chatContext.setChats((prev) => {
-        const lastBotIndex = prev.findIndex(
-          (q) => q.from === "system" && q.query === "Thinking..."
-        );
-        if (lastBotIndex !== -1) {
-          const updated = [...prev];
-          updated[lastBotIndex] = {
-            ...updated[lastBotIndex],
-            query: chunk.content,
-          };
-          return updated;
-        }
-        return prev;
-      });
-    };
+  const handleBotMessage = (chunk: { content: string }) => {
+    chatContext.setChats((prev) =>
+      prev.map((msg) =>
+        msg.id === isThinking.id ? { ...msg, query: chunk.content } : msg
+      )
+    );
+  };
 
-    const handleBotEnd = () => {
-      console.log("✅ Bot finished response");
-      setIsThinking({ id: -1, isTrue: false });
-    };
+  const handleBotEnd = () => {
+    chatContext.setChats(prev =>
+      prev.map(msg =>
+        msg.id === isThinking.id && msg.from === "system"
+          ? { ...msg, completed: true }
+          : msg
+      )
+    );
+    setIsThinking({ id: 0, isTrue: false });
+  };
 
-    const handleBotError = (errMsg: string) => {
-      console.error("❌ Bot error:", errMsg);
-      chatContext.setChats((prev) =>
-        prev.map((q) =>
-          q.query === "Thinking..." ? { ...q, query: errMsg } : q
-        )
-      );
-      setIsThinking({ id: -1, isTrue: false });
-    };
+  socket.on("bot_message", handleBotMessage);
+  socket.on("bot_end", handleBotEnd);
+  socket.on("bot_error", console.error);
 
-    socket.on("bot_message", handleBotMessage);
-    socket.on("bot_end", handleBotEnd);
-    socket.on("bot_error", handleBotError);
+  return () => {
+    socket.off("bot_message", handleBotMessage);
+    socket.off("bot_end", handleBotEnd);
+    socket.off("bot_error", console.error);
+  };
+}, [isThinking.id]); // ✅ only re-run when thinkingId changes
 
-    return () => {
-      socket.off("bot_message", handleBotMessage);
-      socket.off("bot_end", handleBotEnd);
-      socket.off("bot_error", handleBotError);
-    };
-  }, [chatContext]);
+const fileInputRef = useRef<HTMLInputElement>(null);
+
+const [imgURL, setImgURL] = useState('')
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      console.log("📁 Selected file:", selectedFile);
+  const selected = e.target.files?.[0];
+  if (!selected) return;
+
+  if (!selected.type.startsWith("image/")) {
+    alert("Please upload an image file only.");
+    return;
+  }
+
+  setFile(selected);
+  // // Optionally show the image immediately in chat as preview
+  const imgURL = URL.createObjectURL(selected);
+  setImgURL(imgURL)
+  // chatContext.setChats((prev) => [
+  //   ...prev,
+  //   { id: crypto.randomUUID(), query: imgURL, from: "user" },
+  // ]);
+};
+const getFileBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
+  useEffect(() => {
+        if(query.trim().length > 0) setIsInputEmpty(false)
+          else setIsInputEmpty(true)
+  
+    return () => {
+      
     }
-  };
+  }, [query])
+  
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setQuery(e.target.value);
   };
 
-  const handleSubmit = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (isThinking.isTrue) return;
-    if (e.key !== "Enter" || !query.trim()) return;
-    e.preventDefault();
+  const voiceOutput = (text:string) => {
+  if (!window.speechSynthesis) {
+    //console.error("Speech Synthesis not supported in this browser.");
+    return;
+  }
+  const utterance = new SpeechSynthesisUtterance(text);
+  speechSynthesis.speak(utterance);
+};
 
-    const userMessage = query.trim();
-    setQuery("");
-    setIsThinking({ id: chatContext.chats.length + 1, isTrue: true });
 
-    const newChats = [
-      ...chatContext.chats,
-      { query: userMessage, from: "user" as const },
-      { query: "Thinking...", from: "system" as const },
-    ];
-    chatContext.setChats(newChats);
 
-    const messagesToSend = [
-      {
-        role: "system",
-        content: `
-          RULES:
-          1. You are a helpful assistant for ${props.domain}.
-          2. Answer only questions related to this domain.
-          3. Be concise and friendly (1–3 lines).
-          4. Use ${props.data} for reference.
-        `,
-      },
-      ...newChats.map((q) => ({
-        role: q.from === "user" ? "user" : "assistant",
-        content: q.query,
-      })),
-    ];
+const handleSubmit = async () => {
+  if (isThinking.isTrue) return;
+  const userMessage = query.trim();
 
-    console.log("🚀 Sending user_message to backend:", messagesToSend);
+  // 🧩 If user uploaded a file, send it as well
+  let imageBase64 = null;
+  let imgURLPreview = null;
 
-    socket.emit("user_message", {
-      endpoints: props.apiSchema,
-      messages: messagesToSend,
-      authToken: localStorage.getItem("token") || "",
-    });
-  };
+  if (file) {
+    imageBase64 = await getFileBase64(file);
+    imgURLPreview = URL.createObjectURL(file); // 👈 local preview
+    setFile(null); // clear after sending
+  }
+
+  setQuery("");
+
+  const thinkingId = crypto.randomUUID();
+
+  // 🧠 Add image message if exists
+  const newChats = [
+    ...chatContext.chats,
+    ...(userMessage
+      ? [{ id: crypto.randomUUID(), query: userMessage, from: "user" as const }]
+      : []),
+    ...(imgURLPreview
+      ? [{ id: crypto.randomUUID(), query: imageBase64, from: "user" as const }]
+      : []),
+    { id: thinkingId, query: "Thinking...", from: "system" as const },
+  ];
+
+  chatContext.setChats(newChats);
+  setIsThinking({ id: thinkingId, isTrue: true });
+
+  const messagesToSend = [
+    {
+      role: "system",
+      content: `
+        RULES:
+        1. You are a helpful assistant for ${props.domain}.
+        2. Be concise and friendly.
+        3. Use ${props.data} for reference.
+      `,
+    },
+    ...newChats.map((q) => ({
+      role: q.from === "user" ? "user" : "assistant",
+      content: q.query,
+    })),
+  ];
+
+  socket.emit("user_message", {
+    endpoints: props.apiSchema,
+    messages: messagesToSend,
+    authToken: localStorage.getItem("token") || "",
+    domain: props.domain,
+    extraData: props.data,
+    file: imageBase64, // 🧩 send image if exists
+  });
+
+  setImgURL('')
+};
+
+
 
 
   const sendMessage = (text?: string) => {
   if (isThinking.isTrue) return;
+  //console.log('isThinking.id:',isThinking.id)
 
   // Use passed text (from VoiceInput) or current query
   const userMessage = text?.trim() || query.trim();
@@ -156,13 +238,14 @@ const ChatBot: React.FC<PropType> = (props) => {
 
   // Clear input
   setQuery("");
-  setIsThinking({ id: chatContext.chats.length + 1, isTrue: true });
+  setIsThinking({ id: chatContext.chats.length, isTrue: true });
+
 
   // Add user message + thinking placeholder
   const newChats = [
     ...chatContext.chats,
-    { query: userMessage, from: "user" as const },
-    { query: "Thinking...", from: "system" as const },
+    { id: crypto.randomUUID() , query: userMessage, from: "user" as const },
+    { id: crypto.randomUUID() , query: "Thinking...", from: "system" as const },
   ];
   chatContext.setChats(newChats);
 
@@ -184,7 +267,7 @@ const ChatBot: React.FC<PropType> = (props) => {
     })),
   ];
 
-  console.log("🚀 Sending user_message to backend:", messagesToSend);
+  //console.log("🚀 Sending user_message to backend:", messagesToSend);
 
   socket.emit("user_message", {
     endpoints: props.apiSchema,
@@ -194,7 +277,7 @@ const ChatBot: React.FC<PropType> = (props) => {
 };
 
   if (!chatContext) {
-    console.error("ChatBot must be used within a ChatsProvider");
+    //console.error("ChatBot must be used within a ChatsProvider");
     return null;
   }
 
@@ -260,7 +343,7 @@ const ChatBot: React.FC<PropType> = (props) => {
         {chatContext.chats.map((q, id) => {
           const isUser = q.from === "user";
           return (
-            <div key={id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+            <div key={id} className={`flex ${id} ${isUser ? "justify-end" : "justify-start"}`}>
               <div
                 className={`px-4 py-2.5 rounded-2xl break-words transition-colors duration-300 ${
                   isUser
@@ -276,19 +359,40 @@ const ChatBot: React.FC<PropType> = (props) => {
                       } rounded-bl-none`
                 }`}
               >
-                {q.query && (
+     {q.query && (
   isUser ? (
-    <MarkdownRenderer content={q.query} />
+  /^blob:|^data:image\//.test(q.query) ? (
+    <img src={q.query} alt="User upload" className="max-w-full rounded-lg" />
   ) : (
-    q.query.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
-      <img
-        src={q.query}
-        alt="Generated"
-        className="max-w-full rounded-lg"
+    <MarkdownRenderer
+      content={normalizeMarkdown(cleanOllamaContent(q.query))}
+      theme={props.theme}
+    />
+  )
+  ) : q.query.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? (
+    <img
+      src={q.query}
+      alt="Generated"
+      className="max-w-full rounded-lg"
+    />
+  ) : (
+    <div>
+      <MarkdownRenderer
+        content={normalizeMarkdown(cleanOllamaContent(q.query))}
+        theme={props.theme}
       />
-    ) : (
-      <MarkdownRenderer content={q.query} />
-    )
+     {q.from === "system" && q.completed && (
+  <button
+  className={`mt-2 flex justify-center items-center gap-2 p-1 text-sm rounded ${props.theme == 'dark' ? 'bg-gray-200 text-black' : 'bg-blue-500 text-white '}`}
+    onClick={() =>
+      voiceOutput(normalizeMarkdown(cleanOllamaContent(q.query)))
+    }
+  >
+    <FaVolumeUp /> Read aloud
+  </button>
+)}
+
+    </div>
   )
 )}
 
@@ -307,44 +411,77 @@ const ChatBot: React.FC<PropType> = (props) => {
             : "border-gray-100 bg-white"
         }`}
       >
+        {
+          
+          imgURL &&
+          <div className="relative w-fit">
+          <img src={imgURL} className="w-32 h-32 mt-2 mb-2 rounded"/>
+          <button className="absolute px-2 py-1 bg-red-500 rounded top-2 right-2" onClick={() => setImgURL('')}>X</button>
+          </div>
+        }
         <div className="flex items-end justify-center gap-2">
-          <input type="file" id="file-select" className="hidden" onChange={handleFileChange} />
-          {file && <p className="text-xs truncate w-16 mt-1">{file.name}</p>}
-<div className="flex justify-center gap-2 items-center w-full">
+  {/* 🧩 Hidden file input */}
+  <input
+    ref={fileInputRef}
+    type="file"
+    accept="image/*"
+    className="hidden"
+    onChange={handleFileChange}
+  />
 
-         <textarea
-  value={query}
-  onChange={handleChange}
-  onKeyDown={handleSubmit}
-  placeholder="Type a message..."
-  className={`border rounded-xl w-full p-2 no-scrollbar focus:outline-none resize-none text-sm overflow-y-auto scrollbar-none ${
-    props.theme === "dark"
-      ? "border-gray-700 focus:border-blue-500 bg-slate-800 text-white"
-      : "border-gray-300 focus:border-blue-500 bg-white text-gray-900"
-  }`}
-  style={{
-    height: "auto",
-    maxHeight: "100px", // max height before scrolling
-  }}
-  rows={1}
-  onInput={(e) => {
-    const target = e.target as HTMLTextAreaElement;
-    target.style.height = "auto"; // reset height
-    target.style.height = `${Math.min(target.scrollHeight, 100)}px`; // auto-grow up to maxHeight
-  }}
-/>
+  {/* 🧩 Upload Button */}
+  <button
+    onClick={() => fileInputRef.current?.click()}
+    className={`p-2 rounded-lg border ${
+      props.theme === "dark"
+        ? "border-gray-700 text-white hover:bg-slate-800"
+        : "border-gray-300 text-gray-800 hover:bg-gray-100"
+    }`}
+    title="Upload image"
+  >
+    📷
+  </button>
 
-         <VoiceInput
-  onResult={(text) => {
-    const newQuery = query ? query + " " + text : text;
-    setQuery(newQuery);
-    // auto-send
-    setTimeout(() => sendMessage(newQuery), 100);
-  }}
-/>
 
-              </div>
-        </div>
+  <div className="flex-1 flex items-center relative">
+    <textarea
+      value={query}
+      onChange={handleChange}
+      placeholder="Type a message..."
+      className={`border rounded-xl w-full p-2 pr-10 text-sm ${
+        props.theme === "dark"
+          ? "border-gray-700 bg-slate-800 text-white"
+          : "border-gray-300 bg-white text-gray-900"
+      }`}
+      rows={1}
+      onKeyDown={(e) => {
+        if (!isMobile && e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          if (query.trim() || file) handleSubmit();
+        }
+      }}
+    />
+
+    {!isInputEmpty && (
+      <button
+        onClick={handleSubmit}
+        className="absolute right-2 bottom-1 border-2 rounded-full p-1 text-blue-500 hover:text-blue-600 transition"
+      >
+        <FaArrowUp size={13} />
+      </button>
+    )}
+  </div>
+
+  {/* Voice input */}
+  <VoiceInput
+    onResult={(text) => {
+      const newQuery = query ? query + " " + text : text;
+      setQuery(newQuery);
+      setTimeout(() => sendMessage(newQuery), 100);
+    }}
+  />
+</div>
+
       </div>
     </div>
   );

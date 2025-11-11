@@ -2,7 +2,9 @@ import { createContext, Dispatch, SetStateAction } from "react";
 export interface ChatMessage {
   from: "user" | "system";
   generatedImageUrl?:string,
-  query: string;
+  id: string | number | undefined,
+  query: string | null;
+  completed?:boolean,
   file?: File;
   fileUrl?: string; // optional preview URL
   

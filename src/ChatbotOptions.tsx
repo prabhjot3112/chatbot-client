@@ -3,6 +3,7 @@ export interface ChatbotOptions {
   chatbotName?: string;
   theme?: string;
   data?: string;
+  
   apiSchema?: Array<{
     name: string;
     description: string;
@@ -11,6 +12,7 @@ export interface ChatbotOptions {
 
     // Parameters describe what this API expects
     parameters?: {
+      body?: string[],
       path?: string[];   // for {placeholders} in URL
       query?: string[];  // for ?key=value filters
       instructions?:string
